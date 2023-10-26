@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0"
+    />
+    <title>Picture Sorted</title>
+
+    <style>
+      body {
+        text-align: center;
+        font-family: Arial, sans-serif;
+        background-color: #f0f0f0;
+        margin: 0;
+        padding: 0;
+      }
+      h1 {
+        color: #333;
+      }
+      #container {
+        max-width: 100%;
+        margin: 0;
+        /* padding: 20px; */
+        background-color: #fff;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+      }
+      #video {
+        width: 100%;
+        height: auto;
+        border: 2px solid #333;
+        border-radius: 5px;
+      }
+      #folder-input {
+        width: 90%;
+        padding: 10px;
+        margin: 10px 0;
+        border: 2px solid #333;
+        border-radius: 5px;
+      }
+      #capture-button,
+      #download-button {
+        background-color: #333;
+        color: #fff;
+        border: none;
+        padding: 10px 20px;
+        margin: 10px;
+        border-radius: 5px;
+        cursor: pointer;
+        width: 50%;
+      }
+      #capture-button:hover,
+      #download-button:hover {
+        background-color: #555;
+      }
+      #message {
+        color: #333;
+        font-weight: bold;
+        display: none;
+        margin-top: 10px;
+      }
+
+    /* Adjust the webcam size for mobile devices in landscape mode */
+    @media (max-width: 768px) and (orientation: landscape) {
+        #video {
+          width: 90%;
+          height: auto;
+        }
+      }
+    </style>
+    
+
+  </head>
+  <body>
+    <div id="container">
+      <h1>Picture Sorted</h1>
+      <div id="message" style="display: none"></div>
+      <div id="camera-container"></div>
+      <canvas id="canvas" style="display: none;"></canvas>
+      <input type="text" id="folder-input" placeholder="Enter folder name" />
+      <button id="capture-button">Capture</button>
+      <button id="download-button">Download Folders as Zip</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.0/FileSaver.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/webcamjs/1.0.25/webcam.min.js"></script>
+    <script>
+      const pictures = {};
+      const canvas = document.getElementById("canvas");
+      const captureButton = document.getElementById("capture-button");
+      const downloadButton = document.getElementById("download-button");
+      const folderInput = document.getElementById("folder-input");
+      const message = document.getElementById("message");
+
+      // Set up the camera using Webcam.js
+      Webcam.set({
+        width: screen.width, // Set the desired camera width
+        height: 500, // Set the desired camera height
+        image_format: "jpeg",
+        jpeg_quality: 100,
+        constraints: {
+    // Use default constraints (may vary depending on the camera)
+    facingMode: 'environment', // Use the back camera
+  },
+      });
+
+      Webcam.attach("#camera-container");
+
+      function capturePicture() {
+        const folderName = folderInput.value || "Default";
+        if (!pictures[folderName]) {
+          pictures[folderName] = [];
+        }
+
+        Webcam.snap((data_uri) => {
+          // Get the live location (geotag) and timestamp
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              const latitude = position.coords.latitude;
+              const longitude = position.coords.longitude;
+              const timestamp = new Date().toLocaleTimeString(); // Time without date
+
+              // Create the geotag with location and timestamp
+              const geotag = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}\n${timestamp}`;
+
+              const pictureDataUrl = data_uri;
+              // Add the geotag to the picture
+              const image = new Image();
+              image.src = pictureDataUrl;
+              image.onload = function () {
+                const context = canvas.getContext("2d");
+                canvas.width = image.width;
+                canvas.height = image.height;
+                context.drawImage(image, 0, 0);
+                context.fillStyle = "white";
+                context.font = "18px Arial";
+                context.textAlign = "end";
+                context.textBaseline = "bottom";
+                context.fillText(geotag, image.width - 10, image.height - 10);
+
+                // Store the modified image
+                pictures[folderName].push(canvas.toDataURL("image/jpeg"));
+                showMessage("Picture captured with geotag and timestamp!");
+              };
+            },
+            (error) => {
+              console.error("Error getting location:", error);
+            }
+          );
+        });
+      }
+
+      captureButton.addEventListener("click", capturePicture);
+
+      function downloadFoldersAsZip() {
+        const zip = new JSZip();
+
+        for (const folderName in pictures) {
+          const folder = zip.folder(folderName);
+          pictures[folderName].forEach((picture, index) => {
+            folder.file(`picture${index}.jpg`, picture.split(",")[1], {
+              base64: true,
+            });
+          });
+        }
+
+        zip.generateAsync({ type: "blob" }).then((blob) => {
+          saveAs(blob, "folders.zip");
+        });
+      }
+
+      downloadButton.addEventListener("click", downloadFoldersAsZip);
+
+      function showMessage(text) {
+        message.innerText = text;
+        message.style.display = "block";
+        setTimeout(() => {
+          message.style.display = "none";
+        }, 3000);
+      }
+    </script>
+  </body>
+</html>
